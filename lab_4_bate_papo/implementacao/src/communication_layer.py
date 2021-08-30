@@ -8,7 +8,7 @@ class CommunicationLayer:
         self.HEADER_MESSAGE_SIZE_BYTES_LEN = 64
         self.DEFAULT_ENCODING = 'utf-8'
 
-    def send_command(self, command: Command, sock: socket)-> CommandResult:
+    def send_command(self, command: Command, sock: socket):
         command_json = json.dumps(command, cls=EnhancedJSONEncoder)
         command_encoded = command_json.encode(encoding=self.DEFAULT_ENCODING)
         command_len_str = str(len(command_encoded))
@@ -21,6 +21,10 @@ class CommunicationLayer:
     
     def receive_command(self, sock: socket)-> Command:
         command_size_encoded = sock.recv(self.HEADER_MESSAGE_SIZE_BYTES_LEN)
+
+        if(not command_size_encoded):
+            return None
+        
         command_size_str = str(command_size_encoded, encoding=self.DEFAULT_ENCODING).lstrip('0')
         
         #Converting base 10 representation of message size to integer
@@ -45,7 +49,7 @@ class CommunicationLayer:
 
         sock.send(command_result_size_encoded + command_result_encoded)
     
-    def receive_command_result(self, sock: socket):
+    def receive_command_result(self, sock: socket)-> CommandResult:
         result_size_encoded = sock.recv(self.HEADER_MESSAGE_SIZE_BYTES_LEN)
         result_size_str = str(result_size_encoded, encoding=self.DEFAULT_ENCODING).lstrip('0')
         

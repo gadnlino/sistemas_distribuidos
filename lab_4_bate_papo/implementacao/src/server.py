@@ -8,7 +8,7 @@ import threading
 import json
 from interpretation_layer import InterpretationLayer
 from communication_layer import CommunicationLayer
-from models.models import Command, CommandResult, CommandType, User
+from models.models import Command, CommandResult, CommandType, Message, User, UserStatus
 
 class Server:
     def __init__(self, host, port) -> None:
@@ -19,126 +19,271 @@ class Server:
         self.interpretation_layer = InterpretationLayer()
         self.communication_layer = CommunicationLayer()
 
-        self.client_threads = [] #armazena as threads criadas para fazer join
-        self.avaiable_clients = {}
-        self.commands = {} # lista de comandos disponíveis no servidor
+        self.main_socket = None
+        self.inputs = None
 
-        #registrando comandos do servidor, e suas respsctivas funções de callback
-        # self.register_command(
-        #     'list_connections()',
-        #     'Lista as conexões ativas com esse servidor',
-        #     lambda : print(str(self.active_connections.values())))
-        self.register_command(
+        self.active_addreses = []   
+
+        self.client_threads = [] #armazena as threads criadas para fazer join
+        self.users = {}
+
+        self.client_commands = {} # lista de comandos disponíveis para os clientes
+        self.server_commands = {} # lista de comandos disponíveis para o servidor
+
+        self.__register_client_command(
             CommandType.HELLO.name, 
             'Register a client avaiable to exchange messages',
             self.__start_message_exchange)
 
-        self.register_command(
+        self.__register_client_command(
+            CommandType.BYE.name, 
+            'Unregister a client from the avaiable clients to exchange messages',
+            self.__stop_message_exchange)
+
+        self.__register_client_command(
+            CommandType.QUIT.name, 
+            'Unregister a client from the active clients',
+            self.__quit_client)
+
+        self.__register_client_command(
+            CommandType.LIST.name, 
+            'List user messages',
+            self.__list_messages)
+
+        self.__register_client_command(
+            CommandType.PEERS.name, 
+            'List active users',
+            self.__ask_for_peers)
+        
+        self.__register_client_command(
+            CommandType.MESSAGE.name, 
+            'Send message to a user',
+            self.__send_message)
+
+
+
+
+        self.__register_server_command(
             CommandType.QUIT.name, 
             'Stop this application',
-            self.__quit)
-        # self.register_command(
-        #     'list_files()',
-        #     'Lista os arquivos disponiveis para busca no servidor', 
-        #     lambda: print(self.file_fetcher.list_files_in_directory(self.FILES_DIRECTORY)))
+            self.__quit_server)
 
     def run(self):
         '''Inicializa e implementa o loop principal (infinito) do servidor'''
-
-        main_socket = self.__init_socket()
 
         print('Started listening at ' + str(self.HOST) + ':' + str(self.PORT))
         print()
         print()
 
-        print("Avaiable commands:")
+        print("Avaiable client commands:")
 
-        for key, value in self.commands.items():
+        for key, value in self.client_commands.items():
             print(key + ' : ' + value['description'])
 
         print()
         print()
 
-        inputs = [sys.stdin, main_socket]
+        print("Avaiable server commands:")
+
+        for key, value in self.server_commands.items():
+            print(key + ' : ' + value['description'])
+
+        print()
+        print()
+
+        self.main_socket = self.__init_socket()
+        self.inputs = [sys.stdin, self.main_socket]
 
         while True:
             #espera por qualquer entrada de interesse
-            rlist, _, _ = select.select(inputs, [], [])
+            rlist, _, _ = select.select(self.inputs, [], [])
             #tratar todas as entradas prontas
             for input_rlist in rlist:
-                if input_rlist == main_socket:  #pedido novo de conexao
-                    clisock, addr = self.__accept_incoming_connection(main_socket)
-                    print ('New connection: ', addr)
+                if input_rlist == self.main_socket:  #pedido novo de conexao
 
-                    command = self.communication_layer.receive_command(clisock)
+                    client_socket, client_address = self.main_socket.accept()
 
-                    if(command.type in self.commands):
-                        worker_thread = threading.Thread(target=self.commands[command.type]['callback'], args=(command, clisock, addr))
-                        worker_thread.start()
+                    client_thread = threading.Thread(
+                        target=self.__handle_client_connection, 
+                        args=(client_socket, client_address))
+                    client_thread.start()
 
-                    #cria nova thread para atender o cliente
-                    # client_thread = threading.Thread(target=self.handle_incoming_connection, args=(clisock,addr))
-                    # client_thread.start()
-                    # self.client_threads.append(client_thread) #armazena a referencia da thread para usar com join()
+                    self.client_threads.append(client_thread)
                 elif input_rlist == sys.stdin: #entrada padrao
-                    cmd = input()
+                    cmd_str = input()
 
-                    if cmd == CommandType.QUIT.name:
-                        self.commands[cmd]['callback']()
+                    decoded_command, error = self.interpretation_layer.decode_command(cmd_str)
+
+                    if(error != None):
+                        print('Invalid command.')
+                    elif decoded_command.type in self.server_commands:
+                        self.server_commands[decoded_command.type]['callback']()
                         print()
                     else:
                         print('Invalid command.')
 
-    def __start_message_exchange(self, command: Command, socket, addr):
-        print('Start message exchange')
-        print(command)
+    def __start_message_exchange(self, command: Command, client_socket, addr):
+        self.active_addreses.append(addr)
+        
+        user: User = User.from_json(json.dumps(command.data))
 
-        user : User = command.data
-        self.avaiable_clients[addr] = user
+        if not user.username in self.users:
+            self.users[user.username] = {
+                'user': user,
+                'status': UserStatus.ONLINE.name,
+                'address': addr,
+                'socket': client_socket,
+                'messages_sent' : [],
+                'messages_received' : []
+            }
+        else:
+            self.users[user.username]['status'] = UserStatus.ONLINE.name
+            self.users[user.username]['address'] = addr
 
-        command_result = CommandResult(user.username +  ' loggeg in successfully', None)
-        self.communication_layer.send_command_result(command_result, socket)
+        command_result = CommandResult(user.username +  ' logged in successfully', None)
+        self.communication_layer.send_command_result(command_result, client_socket)
 
     def __stop_message_exchange(self, command: Command, socket, addr):
-        print('Stop message exchange')
-        print(command)
+        command_result = None
 
-        command_result = self.communication_layer.send_command(command, socket)
+        if(addr in self.active_addreses):
+            for (username, user_info) in self.users.items():
+                if user_info['address'] == addr:
+                    user : User = user_info['user']
+
+                    user_info['status'] = UserStatus.INACTIVE.name
+
+                    command_result = CommandResult(user.username +  
+                        ' stopped exchanging messages successfully', None)
+                    
+                    break
+        else:
+            command_result = CommandResult(None, 'user is not logged in')
+        
+        self.communication_layer.send_command_result(command_result, socket)
 
     def __ask_for_peers(self, command: Command, socket, addr):
-        print('Ask for peers')
-        print(command)
+        command_result = None
 
-        command_result = self.communication_layer.send_command(command, socket)
+        if(addr in self.active_addreses):
+            current_user: User = None
+            other_users : list[User] = []
+
+            for (username, user_info) in self.users.items():
+                if user_info['address'] == addr:
+                    current_user = user_info['user']
+                    break
+            
+            for (username, user_info) in self.users.items():
+                if user_info['user'].username != current_user.username:
+                    other_users.append(user_info['user'])
+            
+            command_result = CommandResult(other_users, None)
+        else:
+            command_result = CommandResult(None, 'user is not logged in')
+
+        self.communication_layer.send_command_result(command_result, socket)
 
     def __send_message(self, command: Command, socket, addr):
-        print('Sending message')
-        print(command)
+        command_result = None
 
-        command_result = self.communication_layer.send_command(command, socket)
+        if(addr in self.active_addreses):
+            for (username, user_info) in self.users.items():
+                if user_info['address'] == addr:
+                    current_user: User = user_info['user']
+                    message : Message = Message.from_json(json.dumps(command.data))
+
+                    if(message.user.username in self.users and 
+                        self.users[message.user.username]['status'] == UserStatus.ONLINE.name):
+                        recipient_info = self.users[message.user.username]
+                        recipient_socket = recipient_info['socket']
+                        recipient_message = Message(
+                            user=current_user, 
+                            message_body=message.message_body, 
+                            timestamp=  message.timestamp)
+
+                        recipient_command = Command(type=CommandType.MESSAGE.name, data=recipient_message)
+                        self.communication_layer.send_command(recipient_command, recipient_socket)
+
+                        user_info['messages_sent'].append(message)
+                        recipient_info['messages_received'].append(recipient_message)
+
+                        command_result = CommandResult('Message sent successfully', None)
+                    else:
+                        command_result = CommandResult(None, str()+ ' is not logged in')
+
+                    break
+        else:
+            command_result = CommandResult(None, 'user is not logged in')
+
+        self.communication_layer.send_command_result(command_result, socket)
 
     def __list_messages(self, command: Command, socket, addr):
         print('List received messages')
         print(command)
 
-        command_result = self.communication_layer.send_command(command, socket)
+        command_result = None
+
+        if addr in self.active_addreses:
+            for (username, user_info) in self.users.items():
+                if user_info['address'] == addr:
+                    messages_received: list[Message] = user_info['messages_received']
+
+                    messages_received.sort(key=lambda x : x.timestamp)
+
+                    command_result= CommandResult(messages_received, None)
+
+                    break
+        else:
+            command_result = CommandResult(None, 'user is not logged in')
+
+        self.communication_layer.send_command_result(command_result, socket)
 
     def __quit_client(self, command: Command, socket, addr):
-        print('List received messages')
-        print(command)
+        command_result = None
 
-        command_result = self.communication_layer.send_command(command, socket)
+        if addr in self.active_addreses:
+            for (username, user_info) in self.users.items():
+                if 'address' in user_info and user_info['address'] == addr:
+                    user : User = user_info['user']
 
-    def __quit(self):
+                    user_info['status'] = UserStatus.OFFLINE.name
+
+                    if 'address' in user_info:
+                        del user_info['address']
+                    if 'socket' in user_info:
+                        del user_info['socket']
+
+                    self.active_addreses.remove(addr)
+
+                    command_result = CommandResult('ok', None)
+
+                    break
+        else:
+            command_result= CommandResult(None, 'user is not logged in')
+        
+        self.communication_layer.send_command_result(command_result, socket)
+
+    def __quit_server(self):
+        print('Quitting server...')
         for c in self.client_threads: #aguarda todas as threads terminarem
             c.join()
         self.main_socket.close()
-        sys.exit()
+        sys.exit(0)
 
-    def register_command(self, command, description, callback):
+    def __register_client_command(self, command, description, callback):
         '''Registra um comando a ser executado via linha de comando'''
-        if(command not in self.commands):
-            self.commands[command] = {
+        if(command not in self.client_commands):
+            self.client_commands[command] = {
+                'command':command,
+                'description': description,
+                'callback': callback
+            }
+    
+    def __register_server_command(self, command, description, callback):
+        '''Registra um comando a ser executado via linha de comando'''
+        if(command not in self.server_commands):
+            self.server_commands[command] = {
                 'command':command,
                 'description': description,
                 'callback': callback
@@ -161,52 +306,25 @@ class Server:
 
         return sock
 
-    def __accept_incoming_connection(self, sock):
-        '''Aceita o pedido de conexao de um cliente
-        Entrada: o socket do servidor
-        Saida: o novo socket da conexao e o endereco do cliente'''
-
-        # estabelece conexao com o proximo cliente
-        clisock, endr = sock.accept()
-
-        return clisock, endr
-
-    def handle_incoming_connection(self, clisock, addr):
-        '''Recebe mensagens e as envia de volta para o cliente (ate o cliente finalizar)
-        Entrada: socket da conexao e endereco do cliente
-        Saida(exemplo): {"filename": "ola.txt", "term": "ola mundo", "occurrences": null, "error": "File does not exist."}'''
+    def __handle_client_connection(self, client_socket, client_address):
 
         while True:
-            #recebe dados do cliente
-            request_bytes = clisock.recv(self.MAX_BUFFER_SIZE) 
+            command = self.communication_layer.receive_command(client_socket)
 
-            if not request_bytes: # dados vazios: cliente encerrou
-                print(str(addr) + '-> encerrou')
-                clisock.close() # encerra a conexao com o cliente
+            if(command == None):
+                client_socket.close()
+                
+                if(client_address in self.active_addreses):
+                    self.active_addreses.remove(client_address)
+                
                 return
-
-            request_str = str(request_bytes, encoding='utf-8')
-            print(str(addr) + ': ' + request_str)
-
-            request_json = json.loads(request_str)
-
-            filename = request_json['filename']
-            term = request_json['term']
-
-            file_path = self.FILES_DIRECTORY + '/' + filename
-
-            occurrences, error = self.file_parser.count_occurences_of_term(file_path, term)
-
-            response_message = json.dumps({
-                'filename':filename,
-                'term':term,
-                'occurrences':occurrences,
-                'error':error
-            })
-
-            print(response_message)
-
-            clisock.send(response_message.encode(encoding="utf-8")) # ecoa os dados para o cliente
+            elif(command.type in self.client_commands):
+                self.client_commands[command.type]['callback'](
+                    command, client_socket, client_address)
+            else:
+                self.communication_layer.send_command_result(
+                    CommandResult(None, 'Invalid command'),
+                    client_socket)
 
 server = Server('localhost', 10001)
 server.run()

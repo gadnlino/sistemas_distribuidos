@@ -4,6 +4,11 @@ from enum import Enum
 from typing import Any
 import time
 
+class UserStatus(Enum):
+    ONLINE=1
+    INACTIVE=2
+    OFFLINE=3
+
 class CommandType(Enum):
     HELLO=1
     BYE=2
