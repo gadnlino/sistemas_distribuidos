@@ -27,7 +27,12 @@ class User:
 class Message:
     user : User
     message_body: str
-    timestamp: int = time.time()
+    timestamp: float
+
+    def __init__(self, user: User, message_body: str, timestamp: float = time.time()):
+        self.message_body = message_body
+        self.user = user
+        self.timestamp = timestamp
 
 @dataclass_json
 @dataclass

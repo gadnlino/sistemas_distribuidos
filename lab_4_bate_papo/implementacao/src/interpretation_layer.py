@@ -24,7 +24,8 @@ class InterpretationLayer:
             elif(command == CommandType.MESSAGE.name):
                 username = argv[1]
                 message_body = ' '.join(argv[2:])
-                decoded_command = Command(CommandType.MESSAGE.name, data=Message(User(username), message_body))
+                message = Message(User(username), message_body)
+                decoded_command = Command(CommandType.MESSAGE.name, data=message)
                 return decoded_command, None
             elif(command == CommandType.LIST.name):
                 decoded_command = Command(CommandType.LIST.name, None)

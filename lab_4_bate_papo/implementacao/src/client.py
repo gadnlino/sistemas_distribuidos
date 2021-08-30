@@ -69,8 +69,8 @@ class Client:
                         message: Message = Message.from_json(json.dumps(command.data))
                         print(self.__get_beautified_message_str(message))
                         
-                        for _ in range(0,5):
-                            print()
+                        print()
+                        print('--------------------------------------------------------------')
 
                 elif(input_rlist == sys.stdin):
                     command_str = input()
@@ -79,15 +79,13 @@ class Client:
                     if(error == None):
                         if(command.type in self.commands):
                             self.commands[command.type]['callback'](command, main_sock)
-
-                            for _ in range(0,5):
-                                print()
                             
+                            print()
                             print('-------------------------------------------------------------')
                         else:
                             print('Invalid command')
                     else:
-                        print('Error: ' + error)
+                        print('Error: ' + str(error))
 
     def __start_message_exchange(self, command: Command, socket):
         self.communication_layer.send_command(command, socket)
@@ -125,9 +123,6 @@ class Client:
             print('Error: ' + str(command_result.error))
 
     def __send_message(self, command: Command, socket):
-        print('Sending message')
-        print(command)
-
         self.communication_layer.send_command(command, socket)
         command_result = self.communication_layer.receive_command_result(socket)
 
@@ -141,8 +136,6 @@ class Client:
 
         command_result = self.communication_layer.receive_command_result(socket)
 
-        print(command_result)
-
         if(command_result.error == None):
             messages_received : list[Message] = command_result.result
 
@@ -155,18 +148,13 @@ class Client:
             print('Error: ' + str(command_result.error))
     
     def __quit(self, command: Command, socket):
-        print('Quit')
-        print(command)
-
         self.communication_layer.send_command(command, socket)
-        #command_result = self.communication_layer.receive_command_result(socket)
 
         socket.close()
         
         sys.exit(0)
 
     def _register_command(self, command, description, callback):
-        '''Register a command to be executed via command line'''
         if(command not in self.commands):
             self.commands[command] = {
                 'command':command,
