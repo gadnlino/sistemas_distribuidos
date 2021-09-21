@@ -61,51 +61,61 @@ class InterpretationLayer:
         except Exception as e:
             return None, e.__class__
 
-    # def encode_command(self, command: Command):
-    #     encoded_command = ''
+    def encode_command(self, command: Command):
+        encoded_command = ''
 
-    #     try:
-    #         if(command.type == CommandType.HELLO.name):
-    #             user : User = command.data
-    #             encoded_command = CommandType.HELLO.name + ' ' + user.username
-    #             return encoded_command, None
-    #         elif(command.type == CommandType.BYE.name):
-    #             encoded_command = CommandType.BYE.name
-    #             return encoded_command, None
-    #         elif(command.type == CommandType.PEERS.name):
-    #             encoded_command = CommandType.PEERS.name
-    #             return encoded_command, None
-    #         elif(command.type == CommandType.MESSAGE.name):
-    #             message : Message = command.data
-    #             encoded_command = CommandType.MESSAGE.name + ' ' + message.user.username + ' ' + message.message_body
-    #             return encoded_command, None
-    #         elif(command.type == CommandType.LIST.name):
-    #             encoded_command = CommandType.LIST.name
-    #             return encoded_command, None
-    #         elif(command.type == CommandType.QUIT.name):
-    #             encoded_command = CommandType.QUIT.name
-    #             return encoded_command, None
-    #     except Exception as e:
-    #         return None, e.__class__
+        try:
+            if(command.type == CommandType.PUB.name):
+
+                publication : Publication = command.data
+                message: Message = publication.message
+
+                encoded_command = CommandType.PUB.name + ' ' + publication.topic_id + ' ' + message.body
+                return encoded_command, None
+            elif(command.type == CommandType.SUB.name):
+                
+                subscription: Subscription = command.data
+                encoded_command = CommandType.SUB.name + ' ' + subscription.topic_id
+                return encoded_command, None
+            elif(command.type == CommandType.UNSUB.name):
+
+                subscription: Subscription = command.data
+                encoded_command = CommandType.UNSUB.name + ' ' + subscription.topic_id
+                return encoded_command, None
+            elif(command.type == CommandType.CREATE.name):
+
+                topic: Topic = command.data
+                encoded_command = CommandType.CREATE.name + ' ' + topic.topic_id
+                return encoded_command, None
+            elif(command.type == CommandType.DELETE.name):
+                
+                topic: Topic = command.data
+                encoded_command = CommandType.DELETE.name + ' ' + topic.topic_id
+                return encoded_command, None
+            elif(command.type == CommandType.LIST.name):
+                encoded_command = CommandType.LIST.name
+                return encoded_command, None
+        except Exception as e:
+            return None, e.__class__
 
 if __name__ == '__main__':
     i = InterpretationLayer()
-    # command = Command(CommandType.MESSAGE.name, data=Message(User('gadnlino'), 'Ola', 1888773))
-    # encoded_command, error = i.encode_command(command)
+    command = Command(CommandType.UNSUB.name, data=Subscription(topic_id='topic1'))
+    encoded_command, error = i.encode_command(command)
 
-    # if(error == None):
-    #     print(encoded_command)
-    # else:
-    #     print(error)
-
-    print('Digite um comando: ')
-    command = input()
-    decoded_command, error = i.decode_command(command)
     if(error == None):
-        json_string=decoded_command.to_json()
-        # json_string=json.dumps(decoded_command, cls=EnhancedJSONEncoder)
-        print(json_string)
+        print(encoded_command)
     else:
         print(error)
+
+    # print('Digite um comando: ')
+    # command = input()
+    # decoded_command, error = i.decode_command(command)
+    # if(error == None):
+    #     json_string=decoded_command.to_json()
+    #     # json_string=json.dumps(decoded_command, cls=EnhancedJSONEncoder)
+    #     print(json_string)
+    # else:
+    #     print(error)
 
 
