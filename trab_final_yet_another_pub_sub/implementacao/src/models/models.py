@@ -25,9 +25,9 @@ class Message:
 	body: str
 	timestamp: float
 
-	def __init__(self, body):
+	def __init__(self, body, timestamp = time.time()):
 		self.body = body
-		self.timestamp = time.time()
+		self.timestamp = timestamp
 
 @dataclass_json
 @dataclass
@@ -35,9 +35,9 @@ class Subscription:
 	topic_id: str
 	subscriber: Process
 
-	def __init__(self, topic_id):
+	def __init__(self, topic_id, subscriber=None):
 		self.topic_id = topic_id
-		self.subscriber = None
+		self.subscriber = subscriber
 
 @dataclass_json
 @dataclass
@@ -46,10 +46,10 @@ class Publication:
 	publisher: Process
 	message: Message
 
-	def __init__(self, topic_id, message) -> None:
+	def __init__(self, topic_id, message, publisher=None) -> None:
 		self.topic_id = topic_id
 		self.message = message
-		self.publisher = None
+		self.publisher = publisher
 
 @dataclass_json
 @dataclass
@@ -59,11 +59,17 @@ class Topic:
 	publications: List[Publication]
 	publishers: List[Process]
 
-	def __init__(self, topic_id):
+	def __init__(self, topic_id, publishers=[], publications=[], subscribers=[]):
 		self.topic_id = topic_id
-		self.subscribers = []
-		self.publications = []
-		self.publishers = []
+		self.subscribers = subscribers
+		self.publications = publications
+		self.publishers = publishers
+	
+	def __eq__(self, o: object) -> bool:
+		if isinstance(o, Topic):
+			return o.topic_id == self.topic_id
+		
+		return False
 
 @dataclass_json
 @dataclass
