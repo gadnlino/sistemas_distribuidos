@@ -14,10 +14,19 @@ class CommandType(Enum):
 
 @dataclass_json
 @dataclass
-class Process:
-	id: str
-	ip_addr: str
-	port: int
+class User:
+	user_id: str
+	connection: Any
+
+	def __init__(self, user_id, connection = None):
+		self.user_id = user_id
+		self.connection = connection
+	
+	def __eq__(self, o: object) -> bool:
+		if(isinstance(o, User)):
+			return o.user_id == self.user_id
+		
+		return False
 
 @dataclass_json
 @dataclass
@@ -33,7 +42,7 @@ class Message:
 @dataclass
 class Subscription:
 	topic_id: str
-	subscriber: Process
+	subscriber: User
 
 	def __init__(self, topic_id, subscriber=None):
 		self.topic_id = topic_id
@@ -43,7 +52,7 @@ class Subscription:
 @dataclass
 class Publication:
 	topic_id: str
-	publisher: Process
+	publisher: User
 	message: Message
 
 	def __init__(self, topic_id, message, publisher=None) -> None:
@@ -55,9 +64,9 @@ class Publication:
 @dataclass
 class Topic:
 	topic_id: str
-	subscribers: List[Process]
+	subscribers: List[User]
 	publications: List[Publication]
-	publishers: List[Process]
+	publishers: List[User]
 
 	def __init__(self, topic_id, publishers=[], publications=[], subscribers=[]):
 		self.topic_id = topic_id

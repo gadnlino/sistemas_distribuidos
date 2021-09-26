@@ -1,9 +1,6 @@
-#Ver documentação em: https://rpyc.readthedocs.io/en/latest/
-
-# Cliente de echo usando RPC
-from models.models import CommandType, Publication, Subscription, Topic
+from models.models import CommandType, Publication, Subscription, Topic, User
 from interpretation_layer import InterpretationLayer
-import rpyc #modulo que oferece suporte a abstracao de RPC
+import rpyc
 
 SERVER_IP = 'localhost'
 PORT = 65535
@@ -11,13 +8,25 @@ PORT = 65535
 def main():
 	interpretation_layer = InterpretationLayer()
 	conn = rpyc.connect(SERVER_IP, PORT)
-	
-	try:
-		while True:
-			#interage com o servidor ate encerrar
-			#fazRequisicoes(conn)
 
-			command_str = input("Please type in a command: ")
+	logged_in = False
+
+	try:
+		while(True):
+			user_id = input('Please type your user id: ')
+			current_user = User(user_id)
+
+			login_result, login_error = conn.root.exposed_login(current_user.to_json())
+
+			if(login_error != None):
+				print('Error while logging in: ', login_error)
+			else:
+				print(login_result)
+				logged_in = True
+				break
+
+		while True:
+			command_str = input('Please type a command: ')
 			command, command_error = interpretation_layer.decode_command(command_str)
 
 			if(command_error == None):
@@ -26,12 +35,15 @@ def main():
 
 				if(command.type == CommandType.PUB.name):
 					publication: Publication = command.data
+					publication.publisher = current_user
 					result, error = conn.root.exposed_publish(publication.to_json())
 				elif(command.type == CommandType.SUB.name):
 					subscription: Subscription = command.data
+					subscription.subscriber = current_user
 					result, error = conn.root.exposed_subscribe(subscription.to_json())
 				elif(command.type == CommandType.UNSUB.name):
 					subscription: Subscription = command.data
+					subscription.subscriber = current_user
 					result, error = conn.root.exposed_unsubscribe(subscription.to_json())
 				elif(command.type == CommandType.CREATE.name):
 					topic: Topic = command.data
@@ -51,9 +63,17 @@ def main():
 
 	except KeyboardInterrupt:
 		print('Stopping client...')
+
+		if(logged_in):
+			conn.root.exposed_logout(current_user.to_json())
+
 		conn.close()
 	except Exception as e:
 		print('Client stopped abnormally: ', e)
+
+		if(logged_in):
+			conn.root.exposed_logout(current_user.to_json())
+
 		conn.close()
 
 # executa o cliente

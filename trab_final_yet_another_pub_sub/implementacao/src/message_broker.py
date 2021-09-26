@@ -1,26 +1,61 @@
 import rpyc
 from rpyc.utils.server import ThreadedServer
-from models.models import Publication, Subscription, Topic, CommandType
+from models.models import Publication, Subscription, Topic, CommandType, User
 
 PORT = 65535
 
 class MessageBroker(rpyc.Service):
-	__connections = []
+	conn = None
 	__topics = []
+	__users = []
 
 	def on_connect(self, conn):
-		if(conn not in self.__connections):
-			self.__connections.append(conn)
+		self.conn = conn		
 
 	def on_disconnect(self, conn):
-		if(conn in self.__connections):
-			self.__connections.remove(conn)
+		self.conn = None
+
+	def exposed_login(self, user_json: str):
+		user: User = User.from_json(user_json)
+
+		self.print_command('LOGIN', user.user_id)
+
+		result = None
+		error = None
+
+		if(user in self.__users):
+			error = 'User is already logged in'
+		else:
+			user.connection = self.conn
+			self.__users.append(user)
+			result = 'Logged in successfuly'
+		
+		return result, error
+	
+	def exposed_logout(self, user_json: str):
+		user: User = User.from_json(user_json)
+
+		self.print_command('LOGOUT', user.user_id)
+
+		result = None
+		error = None
+
+		if(user not in self.__users):
+			error = 'User is not logged in'
+		else:
+			self.__users.remove(user)
+			result = 'Logged out successfuly'
+		
+		return result, error
+
+	def print_command(self, *args):
+		command_print : str = '' + str(self.conn) + ': ' + ' '.join(args)
+		print(command_print)
 
 	def exposed_publish(self, publication_json: str):
 		pass
 	
 	def exposed_subscribe(self, subscription_json: str):
-		print(self._conn)
 		subscription: Subscription = Subscription.from_json(subscription_json)
 		print(CommandType.SUB.name, ' ', subscription.topic_id)
 
@@ -41,9 +76,9 @@ class MessageBroker(rpyc.Service):
 	def exposed_unsubscribe(self, subscription_json: str):
 		pass
 	
-	def exposed_create_topic(self, topic_json: str):
+	def exposed_create_topic(self, topic_json: str):		
 		topic : Topic = Topic.from_json(topic_json)
-		print(CommandType.CREATE.name, ' ', topic.topic_id)
+		self.print_command(CommandType.CREATE.name, topic.topic_id)
 
 		result = None
 		error = None
@@ -58,7 +93,7 @@ class MessageBroker(rpyc.Service):
 	
 	def exposed_delete_topic(self, topic_json: str):
 		topic : Topic = Topic.from_json(topic_json)
-		print(CommandType.DELETE.name, ' ', topic.topic_id)
+		self.print_command(CommandType.DELETE.name, topic.topic_id)
 
 		result = None
 		error = None
@@ -72,13 +107,14 @@ class MessageBroker(rpyc.Service):
 		return result, error
 
 	def exposed_list_topics(self):
-		print(CommandType.LIST.name)
+		self.print_command(CommandType.LIST.name)
 		return list(map(lambda t: t.topic_id ,self.__topics)), None
 
 if __name__ == '__main__':
 	broker_svc = ThreadedServer(MessageBroker, port=PORT)
 
 	try:
+		print('Starting server')
 		broker_svc.start()
 	except KeyboardInterrupt:
 		print('Stopping server...')
