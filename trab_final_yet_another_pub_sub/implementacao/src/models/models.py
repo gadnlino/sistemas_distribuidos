@@ -5,22 +5,26 @@ from typing import List, Any
 import time
 
 class CommandType(Enum):
-    PUB=1
-    SUB=2
-    UNSUB=3
-    CREATE = 4
-    DELETE=5
-    LIST = 6
+	PUB=1
+	SUB=2
+	UNSUB=3
+	CREATE = 4
+	DELETE=5
+	LIST = 6
+	LOGIN = 7
+	LOGOUT = 8
 
 @dataclass_json
 @dataclass
 class User:
 	user_id: str
 	connection: Any
+	on_publication_callback: Any
 
-	def __init__(self, user_id, connection = None):
+	def __init__(self, user_id, connection = None, on_publication_callback = None):
 		self.user_id = user_id
 		self.connection = connection
+		self.on_publication_callback = on_publication_callback
 	
 	def __eq__(self, o: object) -> bool:
 		if(isinstance(o, User)):

@@ -1,13 +1,21 @@
 from models.models import CommandType, Publication, Subscription, Topic, User
 from interpretation_layer import InterpretationLayer
 import rpyc
+from threading import Thread
 
-SERVER_IP = 'localhost'
+SERVER_LOCATION = 'localhost'
 PORT = 65535
+
+def on_publication_callback(publication_json: str):
+	publication : Publication = Publication.from_json(publication_json)
+
+	print(publication.message.body)
 
 def main():
 	interpretation_layer = InterpretationLayer()
-	conn = rpyc.connect(SERVER_IP, PORT)
+	conn = rpyc.connect(SERVER_LOCATION, PORT)
+
+	bgsrv = rpyc.BgServingThread(conn)
 
 	logged_in = False
 
@@ -40,7 +48,7 @@ def main():
 				elif(command.type == CommandType.SUB.name):
 					subscription: Subscription = command.data
 					subscription.subscriber = current_user
-					result, error = conn.root.exposed_subscribe(subscription.to_json())
+					result, error = conn.root.exposed_subscribe(subscription.to_json(), on_publication_callback)
 				elif(command.type == CommandType.UNSUB.name):
 					subscription: Subscription = command.data
 					subscription.subscriber = current_user
@@ -67,6 +75,7 @@ def main():
 		if(logged_in):
 			conn.root.exposed_logout(current_user.to_json())
 
+		bgsrv.stop()
 		conn.close()
 	except Exception as e:
 		print('Client stopped abnormally: ', e)
@@ -74,8 +83,8 @@ def main():
 		if(logged_in):
 			conn.root.exposed_logout(current_user.to_json())
 
+		bgsrv.stop()
 		conn.close()
 
-# executa o cliente
 if __name__ == "__main__":
 	main()
