@@ -14,8 +14,8 @@ class ClientService:
 		while(not logged_in):
 				user_id = input('Please type your user id: ')
 				current_user = User(user_id)
-
-				login_result, login_error = self.conn.root.exposed_login(current_user.to_json())
+				current_user_json = current_user.to_json()
+				login_result, login_error = self.conn.root.exposed_login(current_user_json)
 
 				if(login_error != None):
 					print('Error while logging in: ', login_error)

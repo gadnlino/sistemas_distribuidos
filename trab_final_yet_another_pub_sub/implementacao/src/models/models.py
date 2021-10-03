@@ -18,11 +18,13 @@ class CommandType(Enum):
 @dataclass
 class User:
 	user_id: str
+	logged_in: bool
 	connection: Any
 	on_publication_callback: Any
 
-	def __init__(self, user_id, connection = None, on_publication_callback = None):
+	def __init__(self, user_id, logged_in=False, connection = None, on_publication_callback = None):
 		self.user_id = user_id
+		self.logged_in = logged_in
 		self.connection = connection
 		self.on_publication_callback = on_publication_callback
 	
@@ -68,12 +70,14 @@ class Publication:
 @dataclass
 class Topic:
 	topic_id: str
+	creator: User
 	subscribers: List[User]
 	publications: List[Publication]
 	publishers: List[User]
 
-	def __init__(self, topic_id, publishers=[], publications=[], subscribers=[]):
+	def __init__(self, topic_id, creator =  None, publishers=[], publications=[], subscribers=[]):
 		self.topic_id = topic_id
+		self.creator = creator
 		self.subscribers = subscribers
 		self.publications = publications
 		self.publishers = publishers
