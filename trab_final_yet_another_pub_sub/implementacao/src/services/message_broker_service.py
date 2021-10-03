@@ -1,9 +1,6 @@
 import rpyc
-from rpyc.utils.server import ThreadedServer
 from models.models import Publication, Subscription, Topic, CommandType, User
 from threading import Thread
-
-PORT = 65535
 
 class MessageBrokerService(rpyc.Service):
 	conn = None
@@ -21,7 +18,7 @@ class MessageBrokerService(rpyc.Service):
 			subscriber.on_publication_callback(publication_str)
 
 	def on_connect(self, conn):
-		self.conn = conn		
+		self.conn = conn
 
 	def on_disconnect(self, conn):
 		self.conn = None
@@ -79,7 +76,7 @@ class MessageBrokerService(rpyc.Service):
 		else:
 			topic = topics[0]
 
-			subscribers = topic.subscribers
+			subscribers = [x for x in topic.subscribers if x != publication.publisher]
 
 			if(len(subscribers) < 1):
 				result = 'Topic does not have subscribers'
@@ -183,16 +180,3 @@ class MessageBrokerService(rpyc.Service):
 	def exposed_list_topics(self):
 		self.__print_command(CommandType.LIST.name)
 		return list(map(lambda t: t.topic_id ,self.__topics)), None
-
-if __name__ == '__main__':
-	broker_svc = ThreadedServer(MessageBrokerService, port=PORT)
-
-	try:
-		print('Starting server')
-		broker_svc.start()
-	except KeyboardInterrupt:
-		print('Stopping server...')
-		broker_svc.close()
-	except Exception as e:
-		print('Server stopped abnormally: ', e)
-		broker_svc.close()
