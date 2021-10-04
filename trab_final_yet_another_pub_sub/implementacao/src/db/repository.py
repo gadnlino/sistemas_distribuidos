@@ -156,6 +156,29 @@ class Repository:
 		except Exception as e:
 			raise e
 
+	def subscription_exists(self, subscription: Subscription)-> bool:
+		try:
+			sql = "select subscription_id \
+					from subscription \
+					where topic_id  = \
+					(select topic_id from topic where topic_name = ?) \
+					and subscriber_id  = \
+					(select user_id from user where user_name = ?)"
+			
+			
+			db_connection = sqlite3.connect(self.db_location)
+			cursor = db_connection.cursor()
+
+			cursor.execute(sql, (subscription.topic_id, subscription.subscriber.user_id,))
+			result = cursor.fetchone()
+
+			cursor.close()
+			db_connection.close()
+
+			return result != None
+		except Exception as e:
+			raise e
+
 	def insert_subscription(self, subscription: Subscription):
 		try:
 			sql = "insert into subscription(topic_id, subscriber_id)\

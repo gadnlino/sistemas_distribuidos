@@ -137,14 +137,18 @@ class MessageBrokerService(rpyc.Service):
 				error = 'Topic does not exist'
 			else:
 				current_user = self.__get_current_user()
-				current_user.on_publication_callback = rpyc.async_(on_publication_callback)
 
 				subscription.subscriber = current_user
 				subscription.topic_id = existant_topic.topic_id
+				
+				if (not self.__repository.subscription_exists(subscription)):
+					current_user.on_publication_callback = rpyc.async_(on_publication_callback)
 
-				self.__repository.insert_subscription(subscription)
+					self.__repository.insert_subscription(subscription)
 
-				result = 'Subscription created successfully'
+					result = 'Subscription created successfully'
+				else:
+					error = 'Susbscription already exists'
 
 			return result, error
 		except Exception as e:
