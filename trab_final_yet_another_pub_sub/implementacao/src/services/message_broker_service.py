@@ -1,4 +1,5 @@
 import rpyc
+import uuid
 from db.repository import Repository
 from models.models import Publication, Subscription, Topic, CommandType, User
 from threading import Thread
@@ -19,6 +20,14 @@ class MessageBrokerService(rpyc.Service):
 			subscriber = subscribers[i]
 			publication_str = publication.to_json()
 			subscriber.on_publication_callback(publication_str)
+	
+	def __get_current_user(self)-> User:
+		users = list(filter(lambda x: x.connection == self.conn, self.__logged_users))
+
+		if(len(users) > 0):
+			return self.__logged_users[0]
+
+		return None
 
 	def on_connect(self, conn):
 		self.conn = conn
@@ -37,8 +46,6 @@ class MessageBrokerService(rpyc.Service):
 
 			existant_user = self.__repository.get_user(user)
 
-			if(existant_user in self.__logged_users):
-				error = 'User is already logged in'
 			if(existant_user == None):
 				user.connection = self.conn
 				user.logged_in = True
@@ -124,25 +131,20 @@ class MessageBrokerService(rpyc.Service):
 			result = None
 			error = None
 
-			topics: list[Topic] = \
-					list(filter(lambda t: t.topic_id == subscription.topic_id, self.__topics))
+			existant_topic = self.__repository.get_topic(Topic(subscription.topic_id))
 
-			if(len(topics) < 1):
+			if(existant_topic == None):
 				error = 'Topic does not exist'
 			else:
-				topic = topics[0]
+				current_user = self.__get_current_user()
+				current_user.on_publication_callback = rpyc.async_(on_publication_callback)
 
-				users : list[User] = \
-					list(filter(lambda u: u.connection == self.conn, self.__logged_users))
+				subscription.subscriber = current_user
+				subscription.topic_id = existant_topic.topic_id
 
-				if(len(users) < 1):
-					error = 'User is not logged in'
-				else:
-					user = users[0]
-					user.on_publication_callback = rpyc.async_(on_publication_callback)
-					topic.subscribers.append(user)
+				self.__repository.insert_subscription(subscription)
 
-					result = 'Subscription created successfully'
+				result = 'Subscription created successfully'
 
 			return result, error
 		except Exception as e:
@@ -155,25 +157,20 @@ class MessageBrokerService(rpyc.Service):
 
 			result = None
 			error = None
-			
-			topics: list[Topic] = \
-					list(filter(lambda t: t.topic_id == subscription.topic_id, self.__topics))
 
-			if(len(topics) < 1):
+			existant_topic = self.__repository.get_topic(Topic(subscription.topic_id))
+
+			if(existant_topic == None):
 				error = 'Topic does not exist'
 			else:
-				topic = topics[0]
+				current_user = self.__get_current_user()
 
-				users : list[User] = \
-					list(filter(lambda u: u.connection == self.conn, self.__logged_users))
+				subscription.subscriber = current_user
+				subscription.topic_id = existant_topic.topic_id
 
-				if(len(users) < 1):
-					error = 'User is not logged in'
-				else:
-					user = users[0]
-					topic.subscribers.remove(user)
+				self.__repository.delete_subscription(subscription)
 
-					result = 'Subscription deleted successfully'
+				result = 'Subscription deleted successfully'			
 
 			return result, error
 		except Exception as e:
@@ -187,8 +184,12 @@ class MessageBrokerService(rpyc.Service):
 			result = None
 			error = None
 
-			if(topic not in self.__topics):
-				self.__topics.append(topic)
+			existant_topic = self.__repository.get_topic(topic)
+
+			if(existant_topic == None):
+				topic_creator = self.__get_current_user()
+				topic.creator = topic_creator
+				self.__repository.insert_topic(topic)
 				result = 'Topic added successfully'
 			else:
 				error = 'Topic has already been created'
@@ -205,9 +206,20 @@ class MessageBrokerService(rpyc.Service):
 			result = None
 			error = None
 
-			if(topic in self.__topics):
-				self.__topics.remove(topic)
-				result = 'Topic removed successfully'
+			existant_topic = self.__repository.get_topic(topic)
+
+			if(topic != None):
+				topic_creator = self.__repository.get_topic_creator(topic)
+				current_user = self.__get_current_user()
+
+				if(topic_creator != current_user):
+					error = 'User is not authorized to delete topic'
+				else:
+					existant_topic.old_topic_name = existant_topic.topic_id
+					existant_topic.topic_id = str(uuid.uuid1())
+					existant_topic.enabled = False
+					self.__repository.disable_topic(existant_topic)
+					result = 'Topic removed successfully'
 			else:
 				error = 'Topic does not exist'
 			
@@ -218,6 +230,8 @@ class MessageBrokerService(rpyc.Service):
 	def exposed_list_topics(self):
 		try:
 			self.__print_command(CommandType.LIST.name)
-			return list(map(lambda t: t.topic_id ,self.__topics)), None
+			enabled_topics =  self.__repository.get_all_enabled_topics()
+
+			return list(map(lambda x: x.to_json(), enabled_topics)), None
 		except Exception as e:
 			print (e)

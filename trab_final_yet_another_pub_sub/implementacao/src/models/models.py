@@ -71,13 +71,17 @@ class Publication:
 class Topic:
 	topic_id: str
 	creator: User
+	enabled: bool
+	old_topic_name = str
 	subscribers: List[User]
 	publications: List[Publication]
 	publishers: List[User]
 
-	def __init__(self, topic_id, creator =  None, publishers=[], publications=[], subscribers=[]):
+	def __init__(self, topic_id, creator =  None, enabled=True, old_topic_name=None, publishers=[], publications=[], subscribers=[]):
 		self.topic_id = topic_id
 		self.creator = creator
+		self.enabled = enabled
+		self.old_topic_name = old_topic_name
 		self.subscribers = subscribers
 		self.publications = publications
 		self.publishers = publishers
