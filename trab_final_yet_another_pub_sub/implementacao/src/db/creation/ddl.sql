@@ -12,13 +12,11 @@ CREATE TABLE topic (topic_id integer PRIMARY KEY AUTOINCREMENT, topic_name text,
 
 CREATE TABLE user (user_id integer PRIMARY KEY AUTOINCREMENT,user_name text, logged_in integer);
 
-CREATE TABLE message (message_id integer PRIMARY KEY AUTOINCREMENT,timestamp real, message_body text);
-
 CREATE TABLE subscription (subscription_id integer PRIMARY KEY AUTOINCREMENT,topic_id integer,subscriber_id integer);
 
-CREATE TABLE publication (publication_id integer PRIMARY KEY AUTOINCREMENT,topic_id integer,publisher_id integer, message_id integer);
+CREATE TABLE publication (publication_id integer PRIMARY KEY AUTOINCREMENT, topic_id integer, publisher_id integer, timestamp real, message_body text, message_hash text);
 
-CREATE TABLE message_delivery (message_delivery_id integer PRIMARY KEY AUTOINCREMENT,message_id integer, recipient_id integer, delivery_timestamp real);
+CREATE TABLE message_delivery (message_hash text, recipient_id integer, delivery_timestamp real);
 
 
 

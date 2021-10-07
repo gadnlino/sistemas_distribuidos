@@ -1,6 +1,6 @@
 import sqlite3
 
-from models.models import Subscription, Topic, User
+from models.models import Publication, Subscription, Topic, User
 
 class Repository:
 	def __init__(self, db_location: str):
@@ -95,6 +95,32 @@ class Repository:
 			return user
 
 		return None
+	
+	def get_topic_subscribers(self, topic: Topic)-> 'list[User]':
+		subscribers: list[User] = []
+
+		try:
+			sql = "select user_name, logged_in from user u \
+				join subscription s on s.subscriber_id = u.user_id \
+				join topic t on s.topic_id = t.topic_id \
+				where t.topic_name = ?"
+			
+			db_connection = sqlite3.connect(self.db_location)
+			cursor = db_connection.cursor()
+
+			cursor.execute(sql, (topic.topic_id,))
+			result = cursor.fetchall()
+			
+			cursor.close()
+			db_connection.close()
+
+			for row in result:
+				subscribers.append(User(row[0], logged_in=bool(row[1])))
+
+			return subscribers
+
+		except Exception as e:
+			raise e
 
 	def insert_topic(self, topic: Topic):
 		try:
@@ -216,8 +242,62 @@ class Repository:
 		except Exception as e:
 			raise e
 
-	def create_publication(self, publication):
-		pass
+	def create_publication(self, publication: Publication):
+		try:
+			sql = "INSERT INTO publication \
+					(topic_id, publisher_id, timestamp, message_body, message_hash) \
+					VALUES(\
+					(select topic_id from topic where topic_name = ?),\
+					(select user_id from user where user_name = ?),\
+					?, ?, ?);"
 
-	def create_message(self, messsage):
-		pass
+			db_connection = sqlite3.connect(self.db_location)
+			cursor = db_connection.cursor()
+
+			cursor.executemany(sql, [(
+				publication.topic_id, 
+				publication.publisher.user_id,
+				publication.message.timestamp, 
+				publication.message.body, 
+				publication.message.message_hash)])
+			db_connection.commit()
+
+			cursor.close()
+			db_connection.close()
+		except Exception as e:
+			raise e
+
+	def create_message_delivery(self, message_hash: str, recipient: User):
+		try:
+			sql = "INSERT INTO message_delivery \
+					(message_hash, recipient_id) \
+					VALUES(?, (select user_id from user where user_name = ?));"
+
+			db_connection = sqlite3.connect(self.db_location)
+			cursor = db_connection.cursor()
+
+			cursor.executemany(sql, [(message_hash, recipient.user_id,)])
+			db_connection.commit()
+
+			cursor.close()
+			db_connection.close()
+		except Exception as e:
+			raise e
+	
+	def update_message_delivery_timestamp(self, message_hash: str, recipient: User, timestamp: float):
+		try:
+			sql = "UPDATE message_delivery \
+					SET delivery_timestamp = ? \
+					where message_hash = ? \
+					and recipient_id = (select user_id from user where user_name = ?);"
+
+			db_connection = sqlite3.connect(self.db_location)
+			cursor = db_connection.cursor()
+
+			cursor.executemany(sql, [(timestamp, message_hash, recipient.user_id,)])
+			db_connection.commit()
+
+			cursor.close()
+			db_connection.close()
+		except Exception as e:
+			raise e

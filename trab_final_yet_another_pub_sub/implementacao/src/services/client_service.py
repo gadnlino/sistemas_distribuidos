@@ -15,7 +15,7 @@ class ClientService:
 				user_id = input('Please type your user id: ')
 				current_user = User(user_id)
 				current_user_json = current_user.to_json()
-				login_result, login_error = self.conn.root.exposed_login(current_user_json)
+				login_result, login_error = self.conn.root.exposed_login(current_user_json, self.__on_publication)
 
 				if(login_error != None):
 					print('Error while logging in: ', login_error)
@@ -41,7 +41,7 @@ class ClientService:
 				elif(command.type == CommandType.SUB.name):
 					subscription: Subscription = command.data
 					subscription.subscriber = current_user
-					result, error = self.conn.root.exposed_subscribe(subscription.to_json(), self.__on_publication)
+					result, error = self.conn.root.exposed_subscribe(subscription.to_json())
 				elif(command.type == CommandType.UNSUB.name):
 					subscription: Subscription = command.data
 					subscription.subscriber = current_user
